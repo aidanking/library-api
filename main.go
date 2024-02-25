@@ -1,8 +1,19 @@
 package main
 
-import "github.com/aidanking/library-api/api"
+import (
+	"github.com/aidanking/library-api/api"
+	"github.com/aidanking/library-api/storage"
+)
 
 func main() {
-	api.ServerStart(":8080")
 
+	db := storage.Connect()
+	defer db.Close()
+
+	server := api.ApiServer{
+		ListenAddr: ":8081",
+		DB:         db,
+	}
+
+	server.Start()
 }

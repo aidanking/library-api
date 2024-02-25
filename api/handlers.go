@@ -1,134 +1,119 @@
 package api
 
 import (
-	"errors"
+	"database/sql"
 	"net/http"
 	"strconv"
 
+	"github.com/aidanking/library-api/storage"
+	"github.com/aidanking/library-api/types"
 	"github.com/gin-gonic/gin"
 )
 
-func handleCreateAuthor(c *gin.Context) {
-	var payload AuthorRequestPayload
+type authorHandlers struct {
+	authorRepository *storage.AuthorRepository
+}
+
+func (handlers *authorHandlers) handleCreateAuthor(c *gin.Context) {
+	var payload types.Author
 
 	if err := c.BindJSON(&payload); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorMessage{ErrorMessage: "bad request data"})
+		c.JSON(http.StatusBadRequest, types.ErrorMessage{ErrorMessage: "bad request data"})
 		return
 	}
 
-	createdAuthor := createAuthor(payload.Author)
+	createdAuthor, createErr := handlers.authorRepository.CreateAuthor(&payload)
 
-	c.JSON(http.StatusCreated, AuthorPayload{Author: createdAuthor})
+	if createErr != nil {
+		c.JSON(http.StatusInternalServerError, types.ErrorMessage{ErrorMessage: "error while creating author data"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, createdAuthor)
 }
 
-func handleGetAuthors(c *gin.Context) {
-	c.JSON(http.StatusOK, AuthorsPayload{Authors: authorsData})
-}
-
-func handleGetAuthor(c *gin.Context) {
+func (handlers *authorHandlers) handleGetAuthor(c *gin.Context) {
 
 	id, idErr := strconv.Atoi(c.Param("id"))
 
 	if idErr != nil {
-		c.JSON(http.StatusInternalServerError, ErrorMessage{ErrorMessage: "internal server error"})
+		c.JSON(http.StatusInternalServerError, types.ErrorMessage{ErrorMessage: "internal server error"})
 		return
 	}
 
-	author, _, authorErr := findAuthorById(id)
+	author, authorErr := handlers.authorRepository.FindAuthorById(int64(id))
 
-	if authorErr != nil {
-		c.JSON(http.StatusNotFound, ErrorMessage{ErrorMessage: authorErr.Error()})
+	if authorErr != nil && authorErr == sql.ErrNoRows {
+		c.JSON(http.StatusNotFound, types.ErrorMessage{ErrorMessage: "author not found"})
+		return
+	} else if authorErr != nil {
+		c.JSON(http.StatusInternalServerError, types.ErrorMessage{ErrorMessage: "internal server error"})
 		return
 	}
 
-	c.JSON(http.StatusOK, AuthorPayload{Author: author})
+	c.JSON(http.StatusOK, author)
 }
 
-func handleUpdateAuthor(c *gin.Context) {
+func (handlers *authorHandlers) handleGetAuthors(c *gin.Context) {
 
-	var payload AuthorRequestPayload
+	authors, authorsErr := handlers.authorRepository.FindAllAuthors()
+
+	if authorsErr != nil {
+		c.JSON(http.StatusInternalServerError, types.ErrorMessage{ErrorMessage: "internal server error"})
+		return
+	}
+
+	c.JSON(http.StatusOK, authors)
+}
+
+func (handlers *authorHandlers) handleUpdateAuthor(c *gin.Context) {
+
+	var payload types.Author
 
 	if bindErr := c.BindJSON(&payload); bindErr != nil {
-		c.JSON(http.StatusBadRequest, ErrorMessage{ErrorMessage: "bad request data"})
+		c.JSON(http.StatusBadRequest, types.ErrorMessage{ErrorMessage: "bad request data"})
 		return
 	}
 
 	id, numErr := strconv.Atoi(c.Param("id"))
 
 	if numErr != nil {
-		c.JSON(http.StatusInternalServerError, ErrorMessage{ErrorMessage: "internal server error"})
+		c.JSON(http.StatusInternalServerError, types.ErrorMessage{ErrorMessage: "internal server error"})
 		return
 	}
 
-	updatedAuthor, authorErr := updateAuthor(id, payload.Author)
+	updatedAuthor, authorErr := handlers.authorRepository.UpdateAuthor(int64(id), &payload)
+
+	if authorErr != nil && authorErr == sql.ErrNoRows {
+		c.JSON(http.StatusNotFound, types.ErrorMessage{ErrorMessage: "author not found"})
+		return
+	}
 
 	if authorErr != nil {
-		c.JSON(http.StatusNotFound, ErrorMessage{ErrorMessage: authorErr.Error()})
+		c.JSON(http.StatusNotFound, types.ErrorMessage{ErrorMessage: "internal server error"})
 		return
 	}
 
-	c.JSON(http.StatusOK, AuthorPayload{Author: updatedAuthor})
+	c.JSON(http.StatusOK, updatedAuthor)
 }
 
-func handleDeleteAuthor(c *gin.Context) {
+func (handlers *authorHandlers) handleDeleteAuthor(c *gin.Context) {
 	id, idErr := strconv.Atoi(c.Param("id"))
 
 	if idErr != nil {
-		c.JSON(http.StatusInternalServerError, ErrorMessage{ErrorMessage: "internal server Error"})
+		c.JSON(http.StatusInternalServerError, types.ErrorMessage{ErrorMessage: "internal server Error"})
 		return
 	}
 
-	deletedAuthor, authorErr := deleteAuthor(id)
+	deletedAuthor, authorErr := handlers.authorRepository.DeleteAuthor(int64(id))
 
-	if authorErr != nil {
-		c.JSON(http.StatusNotFound, ErrorMessage{ErrorMessage: authorErr.Error()})
+	if authorErr != nil && authorErr == sql.ErrNoRows {
+		c.JSON(http.StatusNotFound, types.ErrorMessage{ErrorMessage: "author not found"})
+		return
+	} else if authorErr != nil {
+		c.JSON(http.StatusInternalServerError, types.ErrorMessage{ErrorMessage: "internal server error"})
 		return
 	}
 
-	c.JSON(http.StatusOK, AuthorPayload{Author: deletedAuthor})
-}
-
-func createAuthor(requestAuthor AuthorRequestData) AuthorData {
-
-	newData := AuthorData{Id: 0, FirstName: requestAuthor.FirstName, MiddleName: requestAuthor.MiddleName, LastName: requestAuthor.LastName, Country: requestAuthor.Country}
-	authorsData = append(authorsData, newData)
-
-	return newData
-}
-
-func updateAuthor(id int, requestAuthor AuthorRequestData) (AuthorData, error) {
-	_, authorIndex, authorErr := findAuthorById(id)
-
-	if authorErr != nil {
-		return AuthorData{}, authorErr
-	}
-
-	newData := AuthorData{Id: id, FirstName: requestAuthor.FirstName, MiddleName: requestAuthor.MiddleName, LastName: requestAuthor.LastName, Country: requestAuthor.Country}
-	authorsData[authorIndex] = newData
-
-	return newData, nil
-}
-
-func findAuthorById(id int) (AuthorData, int, error) {
-
-	for authorIndex, author := range authorsData {
-		if author.Id == id {
-			return author, authorIndex, nil
-		}
-	}
-
-	return AuthorData{}, -1, errors.New("author not found")
-}
-
-func deleteAuthor(id int) (AuthorData, error) {
-
-	author, authorIndex, authorErr := findAuthorById(id)
-
-	if authorErr != nil {
-		return AuthorData{}, authorErr
-	}
-
-	authorsData = append(authorsData[:authorIndex], authorsData[authorIndex+1:]...)
-
-	return author, nil
+	c.JSON(http.StatusOK, deletedAuthor)
 }

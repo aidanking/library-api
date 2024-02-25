@@ -1,21 +1,36 @@
 package api
 
-import "github.com/gin-gonic/gin"
+import (
+	"database/sql"
 
-var authorsData = []AuthorData{{Id: 1, FirstName: "Stephen", LastName: "King", Country: "US"}, {Id: 2, FirstName: "George", MiddleName: "R.R.", LastName: "Martin"}, {Id: 3, FirstName: "Sarah", MiddleName: "J.", LastName: "Mass", Country: "US"}, {Id: 4, FirstName: "Brandon", LastName: "Sanderson", Country: "US"}, {Id: 5, FirstName: "Emily", LastName: "Henry", Country: "US"}}
+	"github.com/aidanking/library-api/storage"
+	"github.com/gin-gonic/gin"
+)
 
-func ServerStart(listenAddr string) {
+type ApiServer struct {
+	ListenAddr string
+	DB         *sql.DB
+}
+
+func (apiServer *ApiServer) Start() {
+
+	authorRepository := storage.AuthorRepository{
+		DB: apiServer.DB,
+	}
+
+	authorHandlers := authorHandlers{
+		authorRepository: &authorRepository,
+	}
 
 	r := gin.Default()
 
 	api := r.Group("/api")
 
-	api.POST("/authors", handleCreateAuthor)
-	api.GET("/authors", handleGetAuthors)
-	api.GET("/authors/:id", handleGetAuthor)
-	api.PUT("/authors/:id", handleUpdateAuthor)
-	api.DELETE("/authors/:id", handleDeleteAuthor)
+	api.POST("/authors", authorHandlers.handleCreateAuthor)
+	api.GET("/authors", authorHandlers.handleGetAuthors)
+	api.GET("/authors/:id", authorHandlers.handleGetAuthor)
+	api.PUT("/authors/:id", authorHandlers.handleUpdateAuthor)
+	api.DELETE("/authors/:id", authorHandlers.handleDeleteAuthor)
 
-	r.Run(listenAddr)
-
+	r.Run(apiServer.ListenAddr)
 }
