@@ -51,4 +51,27 @@ async function makeRequest(method = 'GET', url, body = '') {
   const allAuthors = await makeRequest('GET', `${baseUrl}/authors`);
   console.log('all authors');
   console.log(allAuthors);
+
+  const requiredCountryNameOnCreate = await makeRequest(
+    'POST',
+    `${baseUrl}/authors`,
+    {
+      firstName: 'Aidan',
+      lastName: 'King 2',
+    }
+  );
+  console.log('country name required on create');
+  console.log(requiredCountryNameOnCreate);
+
+  const requiredFirstNameOnUpdate = await makeRequest(
+    'PUT',
+    `${baseUrl}/authors/${id}`,
+    {
+      id: 8,
+      lastName: 'King',
+      country: 'IE689',
+    }
+  );
+  console.log('first name is required on update');
+  console.log(requiredFirstNameOnUpdate);
 })();

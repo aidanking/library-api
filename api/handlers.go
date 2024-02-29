@@ -22,6 +22,13 @@ func (handlers *authorHandlers) handleCreateAuthor(c *gin.Context) {
 		return
 	}
 
+	validateErr := payload.Validate()
+
+	if validateErr != nil {
+		c.JSON(http.StatusUnprocessableEntity, types.ErrorMessage{ErrorMessage: validateErr.Error()})
+		return
+	}
+
 	createdAuthor, createErr := handlers.authorRepository.CreateAuthor(&payload)
 
 	if createErr != nil {
@@ -72,6 +79,13 @@ func (handlers *authorHandlers) handleUpdateAuthor(c *gin.Context) {
 
 	if bindErr := c.BindJSON(&payload); bindErr != nil {
 		c.JSON(http.StatusBadRequest, types.ErrorMessage{ErrorMessage: "bad request data"})
+		return
+	}
+
+	validateErr := payload.Validate()
+
+	if validateErr != nil {
+		c.JSON(http.StatusUnprocessableEntity, types.ErrorMessage{ErrorMessage: validateErr.Error()})
 		return
 	}
 
